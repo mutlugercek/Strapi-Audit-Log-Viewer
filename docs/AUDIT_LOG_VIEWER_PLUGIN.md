@@ -1,40 +1,40 @@
-# Audit Log Viewer Plugin - Teknik Dokümantasyon
+# Audit Log Viewer Plugin - Technical Documentation
 
-## Genel Bakış
+## Overview
 
-Audit Log Viewer, Strapi 5.27 Admin Panel içinde audit loglarını görüntülemek için geliştirilmiş özel bir plugin'dir. PostgreSQL'deki partition'lı `audit.audit_log` tablosundan doğrudan veri okur ve SuperAdmin kullanıcılarına read-only erişim sağlar.
+Audit Log Viewer is a custom plugin developed to view audit logs within the Strapi 5.27 Admin Panel. It reads data directly from the partitioned `audit.audit_log` table in PostgreSQL and provides read-only access to SuperAdmin users.
 
-**Önemli**: Bu plugin Strapi'nin ücretli "Audit Logs" özelliği ile çakışmaz. Community edition için özel olarak geliştirilmiştir.
+**Important**: This plugin does not conflict with Strapi's paid "Audit Logs" feature. It is specifically developed for the Community edition.
 
 ---
 
-## Mimari
+## Architecture
 
-### Plugin Konumu
+### Plugin Location
 
 ```
 packages/strapi-plugin-audit-viewer/
 ├── package.json                    # Plugin manifest
-├── tsconfig.json                   # TypeScript yapılandırması
-├── dist/                           # Build çıktıları
+├── tsconfig.json                   # TypeScript configuration
+├── dist/                           # Build outputs
 ├── admin/
 │   └── src/
 │       ├── index.tsx               # Admin entry point
-│       ├── pluginId.ts             # Plugin ID sabiti
+│       ├── pluginId.ts             # Plugin ID constant
 │       ├── pages/
-│       │   └── AuditLogPage.tsx    # Ana UI bileşeni
+│       │   └── AuditLogPage.tsx    # Main UI component
 │       └── translations/
-│           ├── en.json             # İngilizce çeviriler
-│           └── tr.json             # Türkçe çeviriler
+│           ├── en.json             # English translations
+│           └── tr.json             # Turkish translations
 └── server/
     └── src/
         ├── index.ts                # Server entry point
-        ├── bootstrap.ts            # RBAC permission kaydı
+        ├── bootstrap.ts            # RBAC permission registration
         ├── routes/
-        │   └── index.ts            # Admin-type route tanımları
+        │   └── index.ts            # Admin-type route definitions
         ├── controllers/
         │   ├── index.ts
-        │   └── audit-viewer.ts     # HTTP handler'lar
+        │   └── audit-viewer.ts     # HTTP handlers
         ├── services/
         │   ├── index.ts
         │   └── audit-viewer.ts     # DB query logic
@@ -44,7 +44,7 @@ packages/strapi-plugin-audit-viewer/
 
 ```
 
-### Veri Akışı
+### Data Flow
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
@@ -64,26 +64,208 @@ packages/strapi-plugin-audit-viewer/
 
 ---
 
-## Server Tarafı
+## Quick Start (For New Projects)
+
+### 1. Database Setup
+
+Run the migration files in PostgreSQL:
+
+```bash
+# Using pgAdmin or psql
+psql -h localhost -U your_user -d your_db -f migrations/001_audit_schema.sql
+psql -h localhost -U your_user -d your_db -f migrations/002_user_soft_delete.sql
+```
+
+### 2. Plugin Installation
+
+```bash
+# NPM
+npm install strapi-plugin-audit-viewer
+
+# or Yarn
+yarn add strapi-plugin-audit-viewer
+
+# or pnpm
+pnpm add strapi-plugin-audit-viewer
+```
+
+### 3. Plugin Activation
+
+`config/plugins.ts` (or `.js`):
+
+```typescript
+export default ({ env }) => ({
+  'audit-viewer': {
+    enabled: true,
+  },
+  // ... other plugins
+});
+```
+
+### 4. Environment Variables
+
+Add to your `.env` file:
+
+```bash
+# Audit HMAC Secret (for tamper detection)
+AUDIT_HMAC_SECRET=your-secure-secret-here
+
+# IP Hash Salt (for privacy)
+AUDIT_IP_SALT=your-ip-salt-here
+
+# Identifier Hash Salt (for email/username hashing)
+AUDIT_IDENTIFIER_SALT=your-id-salt-here
+
+# Retention period (months)
+AUDIT_RETENTION_MONTHS=24
+```
+
+**Secret Generation**:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+### 5. Build and Start
+
+```bash
+cd your-strapi-app
+pnpm build
+pnpm develop
+```
+
+---
+
+## Strapi Integration (Audit Logging)
+
+The plugin only provides log **reading**. For log **writing**, you need to add the following integrations to your Strapi application:
+
+### Required Files
+
+#### 1. Request Context Middleware
+
+`src/middlewares/request-context.ts`:
+
+```typescript
+import crypto from 'node:crypto';
+
+const IP_HASH_SALT = process.env.AUDIT_IP_SALT || 'default-salt';
+const IDENTIFIER_HASH_SALT = process.env.AUDIT_IDENTIFIER_SALT || 'default-id-salt';
+const UA_MAX_LENGTH = 300;
+
+function maskIp(ip: string): string {
+  const ipv4Parts = ip.split('.');
+  if (ipv4Parts.length === 4 && ipv4Parts.every(p => /^\d+$/.test(p))) {
+    ipv4Parts[3] = '0';
+    return ipv4Parts.join('.');
+  }
+  if (ip.includes(':')) {
+    const segments = ip.split(':');
+    if (segments.length >= 3) {
+      return segments.slice(0, 3).join(':') + ':0:0:0:0:0';
+    }
+  }
+  return ip;
+}
+
+export function hashIp(ip: string): Buffer {
+  const masked = maskIp(ip);
+  return crypto.createHash('sha256').update(masked + IP_HASH_SALT).digest();
+}
+
+export function hashIdentifier(identifier: string): Buffer {
+  const normalized = String(identifier).trim().toLowerCase();
+  return crypto.createHash('sha256').update(normalized + IDENTIFIER_HASH_SALT).digest();
+}
+
+export function truncateUa(ua: string | undefined): string | null {
+  if (!ua) return null;
+  return ua.length > UA_MAX_LENGTH ? ua.substring(0, UA_MAX_LENGTH) : ua;
+}
+
+export function getClientIp(ctx: any): string {
+  const xff = ctx.request?.headers?.['x-forwarded-for'];
+  if (xff) {
+    const firstIp = String(xff).split(',')[0].trim();
+    if (firstIp) return firstIp;
+  }
+  const xri = ctx.request?.headers?.['x-real-ip'];
+  if (xri) return String(xri).trim();
+  return ctx.request?.ip || ctx.ip || '0.0.0.0';
+}
+
+export function extractRequestContext(ctx: any) {
+  const requestId = ctx.request?.headers?.['x-request-id'] || null;
+  const clientIp = getClientIp(ctx);
+  const ipHash = hashIp(clientIp);
+  const ua = truncateUa(ctx.request?.headers?.['user-agent']);
+  return { requestId, clientIp, ipHash, ua };
+}
+
+export default (config: any, { strapi }: { strapi: any }) => {
+  return async (ctx: any, next: () => Promise<void>) => {
+    const reqCtx = extractRequestContext(ctx);
+    ctx.state = ctx.state || {};
+    ctx.state.requestContext = reqCtx;
+    ctx.state.requestId = reqCtx.requestId;
+    ctx.state.ipHash = reqCtx.ipHash;
+    ctx.state.ua = reqCtx.ua;
+    if (reqCtx.requestId) {
+      ctx.set('x-request-id', reqCtx.requestId);
+    }
+    await next();
+  };
+};
+```
+
+#### 2. Middleware Activation
+
+`config/middlewares.ts`:
+
+```typescript
+export default [
+  'strapi::errors',
+  'strapi::security',
+  'strapi::cors',
+  'strapi::logger',
+  'strapi::query',
+  'strapi::body',
+  'strapi::favicon',
+  'strapi::public',
+  // Add request context middleware
+  'global::request-context',
+];
+```
+
+#### 3. Audit Utility
+
+See `examples/audit.ts` for the complete audit utility file.
+
+#### 4. Users-Permissions Extension
+
+See `examples/strapi-server.ts` for the complete extension file.
+
+---
+
+## Server Side
 
 ### Routes (`server/src/routes/index.ts`)
 
-Tüm route'lar `type: 'admin'` olarak tanımlanmıştır - yalnızca Admin Panel üzerinden erişilebilir.
+All routes are defined as `type: 'admin'` - accessible only through the Admin Panel.
 
-| Method | Path | Handler | Açıklama |
-|--------|------|---------|----------|
-| GET | `/logs` | `findMany` | Sayfalı log listesi |
-| GET | `/logs/:id` | `findOne` | Tekil log detayı |
-| GET | `/actions` | `getActions` | Action dropdown listesi |
-| GET | `/stats` | `getStats` | 7 günlük istatistikler |
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/logs` | `findMany` | Paginated log list |
+| GET | `/logs/:id` | `findOne` | Single log detail |
+| GET | `/actions` | `getActions` | Action dropdown list |
+| GET | `/stats` | `getStats` | 7-day statistics |
 | GET | `/export` | `exportCsv` | CSV export |
 
 ### Policies
 
-Her route iki policy ile korunur:
+Each route is protected by two policies:
 
 1. **`admin::isAuthenticatedAdmin`** - Strapi built-in admin auth
-2. **`plugin::audit-viewer.is-super-admin`** - Özel SuperAdmin kontrolü
+2. **`plugin::audit-viewer.is-super-admin`** - Custom SuperAdmin check
 
 ```typescript
 // is-super-admin.ts
@@ -94,16 +276,31 @@ const isSuperAdmin = admin.roles?.some(
 
 ### Service (`server/src/services/audit-viewer.ts`)
 
-#### Query Kısıtlamaları
+#### Query Constraints
 
 ```typescript
-const MAX_PAGE_SIZE = 100;        // Sayfa başına maksimum kayıt
-const DEFAULT_PAGE_SIZE = 25;     // Varsayılan sayfa boyutu
-const MAX_DATE_RANGE_DAYS = 31;   // UI sorgusu için max tarih aralığı
-const MAX_EXPORT_DAYS = 90;       // Export için max tarih aralığı
+const MAX_PAGE_SIZE = 100;        // Maximum records per page
+const DEFAULT_PAGE_SIZE = 25;     // Default page size
+const MAX_DATE_RANGE_DAYS = 31;   // Max date range for UI queries
+const MAX_EXPORT_DAYS = 90;       // Max date range for export
 ```
 
-#### Desteklenen Filtreler (Whitelist)
+#### Date Filter Fix
+
+End date (`toDate`) is set to end of day (23:59:59.999):
+
+```typescript
+let toDate = params.to ? new Date(params.to) : now;
+
+// Set toDate to end of day
+if (params.to) {
+  toDate.setHours(23, 59, 59, 999);
+}
+```
+
+This fix ensures that records made on the same day are not filtered out.
+
+#### Supported Filters (Whitelist)
 
 ```typescript
 const ALLOWED_FILTERS = new Set([
@@ -117,90 +314,9 @@ const ALLOWED_FILTERS = new Set([
 ]);
 ```
 
-#### Audit Actions
+#### PII Protection
 
-```typescript
-const AUDIT_ACTIONS = [
-  'LOGIN_SUCCESS',
-  'LOGIN_FAIL_BUCKETED',
-  'PASSWORD_RESET_REQUEST',
-  'PASSWORD_RESET_CONFIRM',
-  'EMAIL_VERIFY',
-  'PROFILE_PUBLISH',
-  'PROFILE_UNPUBLISH',
-  'PROFILE_UPDATE_SENSITIVE',
-  'ROLE_CHANGED',
-  'PERMISSION_CHANGED',
-  'DELETE_REQUESTED',
-  'DELETE_CONFIRMED',
-  'ANONYMIZED',
-  'PURGED',
-  'ADMIN_IMPERSONATION',
-  'ADMIN_BULK_UPDATE',
-];
-```
-
-#### Audit Log Entegrasyonu
-
-Aşağıdaki olaylar otomatik olarak audit log'a yazılır:
-
-| Olay | Fonksiyon | Tetiklendiği Dosya | Açıklama |
-|------|-----------|-------------------|----------|
-| Başarılı login | `auditLoginSuccess()` | `strapi-server.ts` | Kullanıcı başarıyla giriş yaptığında |
-| Başarısız login (yanlış şifre) | `auditLoginFail()` | `strapi-server.ts` | Geçersiz credentials |
-| Silinmiş hesap login denemesi | `auditLoginFail()` | `strapi-server.ts` | reason: `ACCOUNT_DELETED` |
-| Doğrulanmamış hesap login | `auditLoginFail()` | `strapi-server.ts` | reason: `UNCONFIRMED` |
-| Şifre sıfırlama isteği | `auditPasswordResetRequest()` | `strapi-server.ts` | Forgot password çağrıldığında |
-| Şifre sıfırlama onayı | `auditPasswordResetConfirm()` | `strapi-server.ts` | Şifre başarıyla değiştiğinde |
-| Email doğrulama | `auditEmailVerify()` | `custom.ts` | Email verify edildiğinde |
-| Hesap silme isteği | `auditAccountDeletion()` | `account.ts` | action: `DELETE_REQUESTED` |
-| Hesap silme onayı | `auditAccountDeletion()` | `account.ts` | action: `DELETE_CONFIRMED` |
-| Kullanıcı anonimleştirme | `auditAccountDeletion()` | `account.ts` | action: `ANONYMIZED` |
-
-**Audit Utility Fonksiyonları** (`src/utils/audit.ts`):
-
-```typescript
-// Login olayları
-auditLoginSuccess(strapi, ctx, userId, { method: 'local' })
-auditLoginFail(strapi, ctx, identifier, reasonCode)
-
-// Password reset
-auditPasswordResetRequest(strapi, ctx, userId?)
-auditPasswordResetConfirm(strapi, ctx, userId)
-
-// Email verification
-auditEmailVerify(strapi, ctx, userId)
-
-// Profile olayları
-auditProfilePublish(strapi, ctx, { actorId, targetType, targetId, isPublish })
-
-// Role değişikliği
-auditRoleChange(strapi, ctx, { actorId, targetUserId, fromRoleId, toRoleId })
-
-// Hesap silme
-auditAccountDeletion(strapi, ctx, { action, actorId, targetUserId, reason })
-```
-
-#### DB Sorgulama
-
-Plugin, Strapi CT (Content Type) kullanmaz. Doğrudan Knex ile PostgreSQL sorgusu yapar:
-
-```typescript
-const knex = strapi.db.connection;
-
-// Hot view üzerinden sorgulama (son 90 gün)
-const data = await knex('audit.audit_log_hot')
-  .select([...])
-  .where('ts', '>=', fromDate)
-  .where('ts', '<=', toDate)
-  .orderBy('ts', 'desc')
-  .limit(pageSize)
-  .offset(offset);
-```
-
-#### PII Koruması
-
-`sanitizeRow` fonksiyonu hassas verileri filtreler:
+The `sanitizeRow` function filters sensitive data:
 
 ```typescript
 sanitizeRow(row: any): AuditRow {
@@ -215,433 +331,191 @@ sanitizeRow(row: any): AuditRow {
     target_type: row.target_type,
     target_id: row.target_id,
     request_id: row.request_id,
-    ua: row.ua ? row.ua.substring(0, 100) : null, // UA truncate
+    ua: row.ua ? row.ua.substring(0, 100) : null, // UA truncated
     meta: row.meta || {},
-    // ip_hash ve sig gösterilmiyor (güvenlik)
+    // ip_hash and sig are not displayed (security)
   };
 }
 ```
 
-### Bootstrap (`server/src/bootstrap.ts`)
+---
 
-Plugin yüklendiğinde RBAC permission'ları kaydeder:
+## Admin UI
 
-```typescript
-const actions = [
-  {
-    section: 'plugins',
-    displayName: 'View Audit Logs',
-    uid: 'read',
-    pluginName: 'audit-viewer',
-  },
-  {
-    section: 'plugins',
-    displayName: 'Export Audit Logs',
-    uid: 'export',
-    pluginName: 'audit-viewer',
-  },
-];
+### Style Compatibility
 
-await strapi.admin?.services?.permission?.actionProvider?.registerMany(actions);
-```
+The UI is designed to be compatible with both light and dark themes of the Strapi Admin Panel:
+
+- Table rows: White background (`#ffffff`) and dark text (`#32324d`)
+- Stat cards: Border and shadow for clear separation
+- Badges: Color-coded (success: green, fail: red, action: purple)
+- Modal: Clean background and readable text
+
+### Features
+
+1. **Statistics Cards**: Total, success, failed, most frequent action
+2. **Filters**: Date range, action dropdown, result select
+3. **Table**: Timestamp, action, result, actor, target, request ID, detail button
+4. **Pagination**: Page navigation
+5. **Detail Modal**: All log fields, meta JSON pretty view
+6. **CSV Export**: Export based on filters
 
 ---
 
-## Admin Tarafı
+## Database Requirements
 
-### Entry Point (`admin/src/index.tsx`)
+### Migration Files
 
-Strapi 5 API kullanarak plugin kaydı ve menü linki ekleme:
-
-```typescript
-import { PLUGIN_ID } from './pluginId';
-import { AuditLogPage } from './pages/AuditLogPage';
-
-// Basit icon (SVG sorunlarından kaçınmak için emoji)
-const PluginIcon = () => '📋';
-
-export default {
-  register(app: any) {
-    // Menü linki ve Component birlikte tanımlanır
-    app.addMenuLink({
-      to: `plugins/${PLUGIN_ID}`,
-      icon: PluginIcon,
-      intlLabel: {
-        id: `${PLUGIN_ID}.plugin.name`,
-        defaultMessage: 'Audit Logs',
-      },
-      permissions: [
-        { action: `plugin::${PLUGIN_ID}.read`, subject: null },
-      ],
-      Component: AuditLogPage,
-    });
-
-    app.registerPlugin({
-      id: PLUGIN_ID,
-      name: 'Audit Viewer',
-    });
-  },
-
-  bootstrap() {},
-
-  async registerTrads({ locales }: { locales: string[] }) {
-    // Çeviri dosyalarını yükle
-    return Promise.all(
-      locales.map(async (locale) => {
-        try {
-          const { default: data } = await import(`./translations/${locale}.json`);
-          return { data, locale };
-        } catch {
-          return { data: {}, locale };
-        }
-      })
-    );
-  },
-};
-```
-
-**Önemli Notlar**:
-- `Component` doğrudan `addMenuLink` içinde tanımlanır (lazy loading yerine)
-- Icon olarak emoji kullanılır (SVG import sorunlarından kaçınmak için)
-- `bootstrap()` boş bırakılır (route'lar `addMenuLink` içinde tanımlandığı için)
-
-### Strapi 5 Import Kuralları
-
-**Doğru (Strapi 5)**:
-```typescript
-import { useFetchClient } from '@strapi/strapi/admin';
-```
-
-**Yanlış (Strapi 4)**:
-```typescript
-// import { useFetchClient } from '@strapi/helper-plugin'; // KULLANMA
-```
-
-### AuditLogPage Bileşeni
-
-#### Özellikler
-
-1. **İstatistik Kartları**
-   - Toplam kayıt (7 gün)
-   - Başarılı işlemler
-   - Başarısız işlemler
-   - En sık action
-
-2. **Filtreler**
-   - Tarih aralığı (from/to)
-   - Action dropdown
-   - Result select (success/fail)
-
-3. **Tablo**
-   - Timestamp
-   - Action (Badge)
-   - Result (Renkli badge)
-   - Actor (type + id)
-   - Target (type + id)
-   - Request ID (kısaltılmış)
-   - Detail butonu
-
-4. **Pagination**
-   - Sayfa navigasyonu
-   - Toplam kayıt gösterimi
-
-5. **Detay Modal**
-   - Tüm log alanları
-   - Meta JSON pretty view
-   - User Agent
-
-6. **CSV Export**
-   - Filtrelere göre export
-   - Otomatik dosya adı (tarih bazlı)
-
-#### API Çağrıları
-
-```typescript
-const { get } = useFetchClient();
-
-// Log listesi
-const response = await get(`/${PLUGIN_ID}/logs?page=1&pageSize=25&from=...&to=...`);
-
-// İstatistikler
-const response = await get(`/${PLUGIN_ID}/stats`);
-
-// Actions listesi
-const response = await get(`/${PLUGIN_ID}/actions`);
-
-// CSV Export
-const response = await get(`/${PLUGIN_ID}/export?from=...&to=...`);
-```
-
----
-
-## Kurulum ve Yapılandırma
-
-### Plugin Config (`apps/cms/config/plugins.ts`)
-
-```typescript
-'audit-viewer': {
-  enabled: true,
-},
-```
-
-### Workspace Dependency (`apps/cms/package.json`)
-
-```json
-{
-  "dependencies": {
-    "strapi-plugin-audit-viewer": "workspace:*"
-  }
-}
-```
-
-### Build Komutları
-
-```bash
-# Plugin build
-cd packages/strapi-plugin-audit-viewer
-pnpm build
-
-# Strapi build
-cd apps/cms
-pnpm build
-
-# Development
-cd apps/cms
-pnpm develop
-```
-
----
-
-## Veritabanı Gereksinimleri
-
-Plugin, mevcut audit schema'yı kullanır:
-
-### Gerekli Tablo/View
+#### 001_audit_schema.sql
 
 ```sql
--- Ana partition'lı tablo
-audit.audit_log
+-- Audit schema
+CREATE SCHEMA IF NOT EXISTS audit;
 
--- Hot view (son 90 gün) - UI sorguları için
-audit.audit_log_hot
+-- Partitioned audit log table
+CREATE TABLE IF NOT EXISTS audit.audit_log (
+  id            BIGSERIAL,
+  ts            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actor_type    TEXT NOT NULL,
+  actor_id      BIGINT,
+  action        TEXT NOT NULL,
+  result        TEXT NOT NULL,
+  reason_code   TEXT,
+  target_type   TEXT,
+  target_id     BIGINT,
+  request_id    UUID,
+  ip_hash       BYTEA,
+  ua            TEXT,
+  meta          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  sig           BYTEA,
+  PRIMARY KEY (id, ts)
+) PARTITION BY RANGE (ts);
+
+-- Meta size constraint
+ALTER TABLE audit.audit_log ADD CONSTRAINT audit_meta_size 
+  CHECK (pg_column_size(meta) <= 2048);
+
+-- Hot view (last 90 days)
+CREATE OR REPLACE VIEW audit.audit_log_hot AS
+  SELECT * FROM audit.audit_log 
+  WHERE ts >= now() - interval '90 days';
+
+-- Bucket table for rate limiting
+CREATE TABLE IF NOT EXISTS audit.audit_bucket (
+  window_start  TIMESTAMPTZ NOT NULL,
+  action        TEXT NOT NULL,
+  ip_hash       BYTEA NOT NULL,
+  identifier_hash BYTEA NOT NULL,
+  count         INT NOT NULL DEFAULT 1,
+  first_ts      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_ts       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (window_start, action, ip_hash, identifier_hash)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_audit_log_ts_brin 
+  ON audit.audit_log USING BRIN (ts);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action 
+  ON audit.audit_log (action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor 
+  ON audit.audit_log (actor_type, actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target 
+  ON audit.audit_log (target_type, target_id);
 ```
 
-### Beklenen Kolonlar
+#### 002_user_soft_delete.sql
 
 ```sql
-id            BIGSERIAL
-ts            TIMESTAMPTZ
-actor_type    TEXT
-actor_id      BIGINT
-action        TEXT
-result        TEXT
-reason_code   TEXT
-target_type   TEXT
-target_id     BIGINT
-request_id    UUID
-ip_hash       BYTEA     -- UI'da gösterilmez
-ua            TEXT
-meta          JSONB
-sig           BYTEA     -- UI'da gösterilmez
+-- Soft delete fields for users
+ALTER TABLE public.up_users
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'deleted', 'deleted_pending_purge', 'purged'));
+ALTER TABLE public.up_users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE public.up_users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0;
+ALTER TABLE public.up_users ADD COLUMN IF NOT EXISTS delete_confirm_token_hash TEXT;
+ALTER TABLE public.up_users ADD COLUMN IF NOT EXISTS delete_confirm_token_expires_at TIMESTAMPTZ;
 ```
 
 ---
 
-## Güvenlik
+## Security
 
-### Erişim Kontrolü
+### Access Control
 
 1. **Route Level**: `admin::isAuthenticatedAdmin` + `is-super-admin` policy
-2. **UI Level**: RBAC permission kontrolü (`plugin::audit-viewer.read`)
-3. **Data Level**: PII scrubbing (ip_hash, sig gösterilmez)
+2. **UI Level**: RBAC permission check (`plugin::audit-viewer.read`)
+3. **Data Level**: PII scrubbing (ip_hash, sig not displayed)
 
 ### Rate Limiting
 
-- Export için max 10,000 kayıt limiti
-- Tarih aralığı limitleri (UI: 31 gün, Export: 90 gün)
-- Page size limiti (max 100)
+- Export max 10,000 record limit
+- Date range limits (UI: 31 days, Export: 90 days)
+- Page size limit (max 100)
 
 ### Input Validation
 
-- Tüm filtreler whitelist ile kontrol edilir
-- SQL injection koruması (Knex parameterized queries)
-- Request ID UUID formatı kontrolü
+- All filters are checked with whitelist
+- SQL injection protection (Knex parameterized queries)
+- Request ID UUID format validation
 
 ---
 
-## Sorun Giderme
+## Troubleshooting
 
-### Plugin Menüde Görünmüyor
+### Plugin Not Showing in Menu
 
-1. Plugin build edildi mi kontrol et:
-   ```bash
-   cd packages/strapi-plugin-audit-viewer
-   ls -la dist/
-   ```
+1. Check if plugin is built
+2. Strapi rebuild: `rm -rf .cache dist && pnpm build`
+3. Ensure you're logged in as SuperAdmin
 
-2. Strapi rebuild:
-   ```bash
-   cd apps/cms
-   rm -rf .cache dist
-   pnpm build
-   ```
+### "Invalid hook call" Error
 
-3. SuperAdmin ile giriş yaptığından emin ol
+Caused by multiple copies of React being loaded.
 
-### "Invalid hook call" Hatası
+**Solution**: React and Design System should be defined as `peerDependencies` in the plugin's `package.json`.
 
-Bu hata genellikle React'in birden fazla kopyasının yüklenmesinden kaynaklanır.
+### Empty Table
 
-**Çözüm**: Plugin'in `package.json`'ında React ve Design System `dependencies` yerine `peerDependencies` olarak tanımlanmalıdır:
+- Check if `audit.audit_log_hot` view exists
+- Check if date filter is correct
+- Ensure audit logging integration is done
 
-```json
-{
-  "peerDependencies": {
-    "@strapi/design-system": "^2.0.0-rc.0",
-    "@strapi/icons": "^2.0.0-rc.0",
-    "@strapi/strapi": "^5.0.0",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-router-dom": "^6.0.0",
-    "styled-components": "^6.0.0"
-  }
-}
+### Records Not Showing (Stats show count but table is empty)
+
+Could be a date filter issue. End date should be set to end of day:
+```typescript
+toDate.setHours(23, 59, 59, 999);
 ```
-
-**Neden**: `peerDependencies` kullanıldığında plugin, Strapi'nin React instance'ını kullanır. `dependencies` olarak tanımlanırsa, plugin kendi React kopyasını getirir ve "Invalid hook call" hatasına yol açar.
-
-Düzeltme sonrası:
-```bash
-cd packages/strapi-plugin-audit-viewer
-rm -rf node_modules dist
-cd /path/to/project
-pnpm install
-cd packages/strapi-plugin-audit-viewer
-pnpm build
-cd apps/cms
-rm -rf .cache
-pnpm build
-```
-
-### Beyaz Ekran / Admin Panel Açılmıyor
-
-1. Tarayıcı DevTools > Console'u kontrol et
-2. "Invalid hook call" hatası varsa yukarıdaki çözümü uygula
-3. Network sekmesinde 500/403 hataları kontrol et
-
-### API 403 Hatası
-
-- SuperAdmin rolüne sahip olduğundan emin ol
-- RBAC permissions kontrol et (Settings > Roles)
-
-### Boş Tablo
-
-- `audit.audit_log_hot` view'ının var olduğunu kontrol et
-- Tarih filtresinin doğru olduğunu kontrol et
-- PostgreSQL bağlantısını kontrol et
 
 ---
 
-## Geliştirme
+## Audit Log Integration Summary
 
-### Watch Mode
-
-```bash
-# Terminal 1: Plugin watch
-cd packages/strapi-plugin-audit-viewer
-pnpm watch
-
-# Terminal 2: Strapi develop
-cd apps/cms
-pnpm develop
-```
-
-### Yeni Özellik Ekleme
-
-1. Server'da yeni route/handler ekle
-2. Service'e business logic ekle
-3. Admin UI'da bileşen güncelle
-4. Plugin rebuild + Strapi rebuild
+| Event | Function | Triggered From |
+|-------|----------|----------------|
+| Successful login | `auditLoginSuccess()` | `strapi-server.ts` |
+| Failed login | `auditLoginFail()` | `strapi-server.ts` |
+| Deleted account login | `auditLoginFail()` | `strapi-server.ts` |
+| Unverified account login | `auditLoginFail()` | `strapi-server.ts` |
+| Password reset request | `auditPasswordResetRequest()` | `strapi-server.ts` |
+| Password reset confirmation | `auditPasswordResetConfirm()` | `strapi-server.ts` |
+| Email verification | `auditEmailVerify()` | `custom.ts` |
+| Account deletion request | `auditAccountDeletion()` | `account.ts` |
+| Account deletion confirmation | `auditAccountDeletion()` | `account.ts` |
 
 ---
 
-## Plugin package.json Yapısı
+## Version Information
 
-**Kritik**: React ve Strapi Design System `peerDependencies` olarak tanımlanmalıdır:
-
-```json
-{
-  "name": "strapi-plugin-audit-viewer",
-  "version": "1.0.0",
-  "strapi": {
-    "displayName": "Audit Log Viewer",
-    "name": "audit-viewer",
-    "kind": "plugin"
-  },
-  "devDependencies": {
-    "@strapi/sdk-plugin": "^5.2.6",
-    "@strapi/strapi": "^5.0.0",
-    "@strapi/types": "^5.0.0",
-    "@types/react": "^18.0.0",
-    "@types/react-dom": "^18.0.0",
-    "typescript": "^5.0.0"
-  },
-  "peerDependencies": {
-    "@strapi/design-system": "^2.0.0-rc.0",
-    "@strapi/icons": "^2.0.0-rc.0",
-    "@strapi/strapi": "^5.0.0",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-router-dom": "^6.0.0",
-    "styled-components": "^6.0.0"
-  }
-}
-```
-
-**Önemli**:
-- `dependencies` bölümünde React veya Design System **olmamalı**
-- Tüm UI bağımlılıkları `peerDependencies` altında olmalı
-- Bu yapı, plugin'in Strapi'nin React instance'ını kullanmasını sağlar
-
----
-
-## Versiyon Bilgisi
-
-| Bileşen | Versiyon |
-|---------|----------|
+| Component | Version |
+|-----------|---------|
 | Plugin | 1.0.0 |
 | Strapi | 5.27.0 |
-| @strapi/design-system | ^2.0.0-rc.0 (peer) |
-| @strapi/icons | ^2.0.0-rc.0 (peer) |
 | Node.js | >=18.0.0 <=22.x.x |
 
 ---
 
-## İlgili Dosyalar
+## Related Documents
 
-### Audit Logging
-
-| Dosya | Açıklama |
-|-------|----------|
-| `src/utils/audit.ts` | Ana audit utility fonksiyonları |
-| `src/middlewares/request-context.ts` | IP hash, request ID extraction |
-| `src/extensions/users-permissions/strapi-server.ts` | Login/logout audit hook'ları |
-| `src/api/auth/controllers/custom.ts` | Email verify audit |
-| `src/api/account/controllers/account.ts` | Account deletion audit |
-| `config/cron.ts` | Bucket flush ve partition management |
-
-### Database
-
-| Dosya | Açıklama |
-|-------|----------|
-| `database/migrations/001_audit_schema.sql` | Audit schema ve tablolar |
-| `database/migrations/002_user_soft_delete.sql` | Soft delete alanları |
-
----
-
-## İlgili Dokümanlar
-
-- [Audit & Soft Delete Sistemi](./AUDIT_SOFT_DELETE.md)
 - [Strapi 5 Plugin Development](https://docs.strapi.io/dev-docs/plugins/development/create-a-plugin)
 - [Strapi Admin Panel API](https://docs.strapi.io/dev-docs/admin-panel-api)
-

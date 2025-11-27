@@ -53,14 +53,14 @@
     "react-router-dom": "^6.0.0",
     "styled-components": "^6.0.0"
   },
-  "author": "Mutlu Gerçek",
   "keywords": [
     "strapi",
-    "plugin",
+    "strapi-plugin",
     "audit",
     "logging",
     "postgresql",
-    "admin-panel"
+    "admin-panel",
+    "security"
   ],
   "repository": {
     "type": "git",

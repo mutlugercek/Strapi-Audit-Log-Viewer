@@ -25,7 +25,7 @@ interface Stats {
 }
 
 const formatDate = (ts: string) => {
-  return new Date(ts).toLocaleString('tr-TR');
+  return new Date(ts).toLocaleString('en-US');
 };
 
 const AuditLogPage = () => {
@@ -84,7 +84,7 @@ const AuditLogPage = () => {
       setPageCount(response?.data?.meta?.pagination?.pageCount || 1);
     } catch (err: any) {
       console.error('Audit fetch error:', err);
-      setError(err?.message || 'Audit logları yüklenirken hata oluştu');
+      setError(err?.message || 'Failed to load audit logs');
       setLogs([]);
     } finally {
       setLoading(false);
@@ -122,28 +122,34 @@ const AuditLogPage = () => {
     }
   };
 
-  // Styles
+  // Styles - Strapi Admin Panel compatible (dark/light theme support)
   const styles = {
-    container: { padding: '32px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', maxWidth: '1400px', margin: '0 auto' },
+    container: { 
+      padding: '32px', 
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', 
+      maxWidth: '1400px', 
+      margin: '0 auto',
+      color: '#32324d',
+    },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-    title: { margin: 0, fontSize: '32px', fontWeight: 600 },
+    title: { margin: 0, fontSize: '32px', fontWeight: 600, color: '#32324d' },
     subtitle: { margin: '8px 0 0', color: '#666' },
     button: { padding: '10px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px' },
     primaryBtn: { background: '#4945ff', color: '#fff' },
     secondaryBtn: { background: '#f0f0ff', color: '#4945ff', border: '1px solid #d9d8ff' },
     statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' },
-    statCard: { background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
+    statCard: { background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)', border: '1px solid #eaeaef' },
     statLabel: { fontSize: '12px', color: '#666', textTransform: 'uppercase' as const, letterSpacing: '0.5px' },
-    statValue: { fontSize: '28px', fontWeight: 600, marginTop: '4px' },
-    filterBar: { background: '#fff', padding: '20px', borderRadius: '8px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
+    statValue: { fontSize: '28px', fontWeight: 600, marginTop: '4px', color: '#32324d' },
+    filterBar: { background: '#ffffff', padding: '20px', borderRadius: '8px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)', border: '1px solid #eaeaef' },
     filterGrid: { display: 'flex', gap: '16px', flexWrap: 'wrap' as const, alignItems: 'flex-end' },
     filterGroup: { display: 'flex', flexDirection: 'column' as const, gap: '6px' },
     label: { fontSize: '12px', fontWeight: 500, color: '#32324d' },
-    input: { padding: '10px 12px', border: '1px solid #dcdce4', borderRadius: '4px', fontSize: '14px', minWidth: '160px' },
-    select: { padding: '10px 12px', border: '1px solid #dcdce4', borderRadius: '4px', fontSize: '14px', minWidth: '140px', background: '#fff' },
-    table: { width: '100%', borderCollapse: 'collapse' as const, background: '#fff', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
-    th: { textAlign: 'left' as const, padding: '14px 16px', background: '#f6f6f9', fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' as const },
-    td: { padding: '14px 16px', borderTop: '1px solid #eaeaef', fontSize: '14px' },
+    input: { padding: '10px 12px', border: '1px solid #dcdce4', borderRadius: '4px', fontSize: '14px', minWidth: '160px', background: '#fff', color: '#32324d' },
+    select: { padding: '10px 12px', border: '1px solid #dcdce4', borderRadius: '4px', fontSize: '14px', minWidth: '140px', background: '#fff', color: '#32324d' },
+    table: { width: '100%', borderCollapse: 'collapse' as const, background: '#ffffff', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.1)', border: '1px solid #eaeaef' },
+    th: { textAlign: 'left' as const, padding: '14px 16px', background: '#f6f6f9', fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' as const, borderBottom: '2px solid #eaeaef' },
+    td: { padding: '14px 16px', borderTop: '1px solid #eaeaef', fontSize: '14px', color: '#32324d', background: '#ffffff' },
     badge: { display: 'inline-block', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
     successBadge: { background: '#c6f0c2', color: '#0a5814' },
     failBadge: { background: '#fdd8d8', color: '#a82222' },
@@ -152,19 +158,23 @@ const AuditLogPage = () => {
     emptyIcon: { fontSize: '48px', marginBottom: '16px' },
     emptyTitle: { margin: '0 0 8px', color: '#32324d', fontSize: '18px' },
     emptyText: { margin: 0, color: '#666', maxWidth: '400px', marginLeft: 'auto', marginRight: 'auto' },
-    pagination: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderTop: '1px solid #eaeaef' },
+    pagination: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#ffffff', borderTop: '1px solid #eaeaef', color: '#32324d' },
+    paginationText: { color: '#666', fontSize: '14px' },
+    paginationInfo: { padding: '0 12px', color: '#32324d' },
     modal: { position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modalContent: { background: '#fff', borderRadius: '8px', padding: '24px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'auto' },
+    modalContent: { background: '#ffffff', borderRadius: '8px', padding: '24px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'auto', color: '#32324d' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    modalTitle: { margin: 0, fontSize: '20px', fontWeight: 600 },
+    modalTitle: { margin: 0, fontSize: '20px', fontWeight: 600, color: '#32324d' },
     closeBtn: { background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' },
     detailGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
     detailItem: { marginBottom: '12px' },
     detailLabel: { fontSize: '12px', color: '#666', marginBottom: '4px' },
     detailValue: { fontSize: '14px', color: '#32324d' },
-    metaBox: { background: '#f6f6f9', padding: '12px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap' as const, maxHeight: '200px', overflow: 'auto' },
-    loader: { display: 'flex', justifyContent: 'center', padding: '60px' },
-    errorBox: { background: '#fdd8d8', border: '1px solid #f5c6cb', borderRadius: '8px', padding: '20px', marginBottom: '24px' },
+    metaBox: { background: '#f6f6f9', padding: '12px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap' as const, maxHeight: '200px', overflow: 'auto', color: '#32324d', border: '1px solid #eaeaef' },
+    loader: { display: 'flex', justifyContent: 'center', padding: '60px', color: '#32324d' },
+    errorBox: { background: '#fdd8d8', border: '1px solid #f5c6cb', borderRadius: '8px', padding: '20px', marginBottom: '24px', color: '#a82222' },
+    tableRow: { background: '#ffffff' },
+    tableRowHover: { background: '#f6f6f9' },
   };
 
   return (
@@ -173,18 +183,18 @@ const AuditLogPage = () => {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>📋 Audit Logs</h1>
-          <p style={styles.subtitle}>Son 90 günlük sistem audit logları (read-only)</p>
+          <p style={styles.subtitle}>Last 90 days system audit logs (read-only)</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={fetchLogs}>
-            🔄 Yenile
+            🔄 Refresh
           </button>
           <button 
             style={{ ...styles.button, ...styles.primaryBtn, opacity: exporting ? 0.7 : 1 }} 
             onClick={handleExport}
             disabled={exporting}
           >
-            📥 {exporting ? 'İndiriliyor...' : 'CSV İndir'}
+            📥 {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
         </div>
       </div>
@@ -193,23 +203,23 @@ const AuditLogPage = () => {
       {stats && (
         <div style={styles.statsGrid}>
           <div style={styles.statCard}>
-            <div style={styles.statLabel}>Toplam (7 gün)</div>
+            <div style={styles.statLabel}>Total (7 days)</div>
             <div style={styles.statValue}>{stats.total?.toLocaleString() || 0}</div>
           </div>
           <div style={styles.statCard}>
-            <div style={styles.statLabel}>Başarılı</div>
+            <div style={styles.statLabel}>Success</div>
             <div style={{ ...styles.statValue, color: '#0a5814' }}>
               {stats.byResult?.find((r) => r.result === 'success')?.count || 0}
             </div>
           </div>
           <div style={styles.statCard}>
-            <div style={styles.statLabel}>Başarısız</div>
+            <div style={styles.statLabel}>Failed</div>
             <div style={{ ...styles.statValue, color: '#a82222' }}>
               {stats.byResult?.find((r) => r.result === 'fail')?.count || 0}
             </div>
           </div>
           <div style={styles.statCard}>
-            <div style={styles.statLabel}>En Sık Action</div>
+            <div style={styles.statLabel}>Most Frequent</div>
             <div style={{ ...styles.statValue, fontSize: '16px' }}>{stats.byAction?.[0]?.action || '-'}</div>
           </div>
         </div>
@@ -219,7 +229,7 @@ const AuditLogPage = () => {
       <div style={styles.filterBar}>
         <div style={styles.filterGrid}>
           <div style={styles.filterGroup}>
-            <label style={styles.label}>Başlangıç</label>
+            <label style={styles.label}>Start Date</label>
             <input
               type="date"
               value={filters.from}
@@ -228,7 +238,7 @@ const AuditLogPage = () => {
             />
           </div>
           <div style={styles.filterGroup}>
-            <label style={styles.label}>Bitiş</label>
+            <label style={styles.label}>End Date</label>
             <input
               type="date"
               value={filters.to}
@@ -243,7 +253,7 @@ const AuditLogPage = () => {
               onChange={(e) => setFilters(f => ({ ...f, action: e.target.value }))}
               style={styles.select}
             >
-              <option value="">Tümü</option>
+              <option value="">All</option>
               <option value="LOGIN_SUCCESS">LOGIN_SUCCESS</option>
               <option value="LOGIN_FAIL_BUCKETED">LOGIN_FAIL_BUCKETED</option>
               <option value="PASSWORD_RESET_REQUEST">PASSWORD_RESET_REQUEST</option>
@@ -254,15 +264,15 @@ const AuditLogPage = () => {
             </select>
           </div>
           <div style={styles.filterGroup}>
-            <label style={styles.label}>Sonuç</label>
+            <label style={styles.label}>Result</label>
             <select
               value={filters.result}
               onChange={(e) => setFilters(f => ({ ...f, result: e.target.value }))}
               style={styles.select}
             >
-              <option value="">Tümü</option>
-              <option value="success">Başarılı</option>
-              <option value="fail">Başarısız</option>
+              <option value="">All</option>
+              <option value="success">Success</option>
+              <option value="fail">Failed</option>
             </select>
           </div>
         </div>
@@ -271,9 +281,9 @@ const AuditLogPage = () => {
       {/* Error */}
       {error && (
         <div style={styles.errorBox}>
-          <strong>Hata:</strong> {error}
+          <strong>Error:</strong> {error}
           <button style={{ ...styles.button, ...styles.secondaryBtn, marginLeft: '16px' }} onClick={fetchLogs}>
-            Tekrar Dene
+            Retry
           </button>
         </div>
       )}
@@ -281,16 +291,16 @@ const AuditLogPage = () => {
       {/* Loading */}
       {loading ? (
         <div style={styles.loader}>
-          <div>Yükleniyor...</div>
+          <div>Loading...</div>
         </div>
       ) : logs.length === 0 ? (
         /* Empty State */
         <div style={styles.emptyState}>
           <div style={styles.emptyIcon}>📭</div>
-          <h3 style={styles.emptyTitle}>Henüz gösterilecek bir kayıt yok</h3>
+          <h3 style={styles.emptyTitle}>No records to display</h3>
           <p style={styles.emptyText}>
-            Audit logları PostgreSQL <code>audit.audit_log_hot</code> view'ından okunur. 
-            Sistem olayları gerçekleştikçe burada görünecektir.
+            Audit logs are read from PostgreSQL <code>audit.audit_log_hot</code> view. 
+            Records will appear here as system events occur.
           </p>
         </div>
       ) : (
@@ -299,13 +309,13 @@ const AuditLogPage = () => {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Zaman</th>
+                <th style={styles.th}>Timestamp</th>
                 <th style={styles.th}>Action</th>
-                <th style={styles.th}>Sonuç</th>
+                <th style={styles.th}>Result</th>
                 <th style={styles.th}>Actor</th>
                 <th style={styles.th}>Target</th>
                 <th style={styles.th}>Request ID</th>
-                <th style={styles.th}>Detay</th>
+                <th style={styles.th}>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -317,7 +327,7 @@ const AuditLogPage = () => {
                   </td>
                   <td style={styles.td}>
                     <span style={{ ...styles.badge, ...(log.result === 'success' ? styles.successBadge : styles.failBadge) }}>
-                      {log.result === 'success' ? '✓ Başarılı' : '✗ Başarısız'}
+                      {log.result === 'success' ? '✓ Success' : '✗ Failed'}
                     </span>
                   </td>
                   <td style={styles.td}>
@@ -326,7 +336,7 @@ const AuditLogPage = () => {
                   <td style={styles.td}>
                     {log.target_type ? `${log.target_type}${log.target_id ? ` #${log.target_id}` : ''}` : '-'}
                   </td>
-                  <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: '11px' }}>
+                  <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: '11px', color: '#8e8ea9' }}>
                     {log.request_id ? log.request_id.substring(0, 8) + '...' : '-'}
                   </td>
                   <td style={styles.td}>
@@ -334,7 +344,7 @@ const AuditLogPage = () => {
                       style={{ ...styles.button, ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}
                       onClick={() => setSelectedLog(log)}
                     >
-                      👁️ Görüntüle
+                      👁️ View
                     </button>
                   </td>
                 </tr>
@@ -344,8 +354,8 @@ const AuditLogPage = () => {
 
           {/* Pagination */}
           <div style={styles.pagination}>
-            <span style={{ color: '#666', fontSize: '14px' }}>
-              {total} kayıttan {logs.length} tanesi gösteriliyor
+            <span style={styles.paginationText}>
+              Showing {logs.length} of {total} records
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
@@ -353,15 +363,15 @@ const AuditLogPage = () => {
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page <= 1}
               >
-                ← Önceki
+                ← Previous
               </button>
-              <span style={{ padding: '0 12px' }}>Sayfa {page} / {pageCount}</span>
+              <span style={styles.paginationInfo}>Page {page} / {pageCount}</span>
               <button
                 style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px' }}
                 onClick={() => setPage(p => p + 1)}
                 disabled={page >= pageCount}
               >
-                Sonraki →
+                Next →
               </button>
             </div>
           </div>
@@ -379,7 +389,7 @@ const AuditLogPage = () => {
             
             <div style={styles.detailGrid}>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Zaman</div>
+                <div style={styles.detailLabel}>Timestamp</div>
                 <div style={styles.detailValue}>{formatDate(selectedLog.ts)}</div>
               </div>
               <div style={styles.detailItem}>
@@ -387,7 +397,7 @@ const AuditLogPage = () => {
                 <div><span style={{ ...styles.badge, ...styles.actionBadge }}>{selectedLog.action}</span></div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Sonuç</div>
+                <div style={styles.detailLabel}>Result</div>
                 <div>
                   <span style={{ ...styles.badge, ...(selectedLog.result === 'success' ? styles.successBadge : styles.failBadge) }}>
                     {selectedLog.result}
@@ -395,7 +405,7 @@ const AuditLogPage = () => {
                 </div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Sebep</div>
+                <div style={styles.detailLabel}>Reason</div>
                 <div style={styles.detailValue}>{selectedLog.reason_code || '-'}</div>
               </div>
               <div style={styles.detailItem}>
@@ -431,7 +441,7 @@ const AuditLogPage = () => {
               <div style={styles.metaBox}>
                 {Object.keys(selectedLog.meta || {}).length > 0
                   ? JSON.stringify(selectedLog.meta, null, 2)
-                  : 'Metadata yok'}
+                  : 'No metadata'}
               </div>
             </div>
           </div>

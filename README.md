@@ -2,6 +2,10 @@
 
 A custom Strapi 5 plugin for viewing audit logs directly from PostgreSQL partition tables. Designed for Strapi Community Edition.
 
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Strapi](https://img.shields.io/badge/strapi-5.27-purple)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 ## Features
 
 - **Read-only audit log viewer** in Strapi Admin Panel
@@ -11,8 +15,16 @@ A custom Strapi 5 plugin for viewing audit logs directly from PostgreSQL partiti
 - **Hot view optimization** - queries `audit.audit_log_hot` (last 90 days)
 - **Filtering** - by date range, action, result, actor, target
 - **Pagination** - configurable page size (max 100)
+- **Statistics** - 7-day summary with charts
 - **CSV Export** - export filtered results
 - **PII Protection** - sensitive data (ip_hash, sig) not exposed to UI
+- **Dark/Light theme** compatible UI
+
+## Screenshots
+
+| Stats & Filters | Table View | Detail Modal |
+|-----------------|------------|--------------|
+| ![Stats](docs/screenshots/stats.png) | ![Table](docs/screenshots/table.png) | ![Detail](docs/screenshots/detail.png) |
 
 ## Requirements
 
@@ -20,15 +32,18 @@ A custom Strapi 5 plugin for viewing audit logs directly from PostgreSQL partiti
 - PostgreSQL with `audit` schema
 - Node.js >= 18.0.0
 
-## Installation
+## Quick Start
 
 ### 1. Database Setup
 
 Run the migration files in order:
 
 ```bash
+# Using psql
 psql -d your_database -f migrations/001_audit_schema.sql
 psql -d your_database -f migrations/002_user_soft_delete.sql
+
+# Or using pgAdmin - open each file and execute
 ```
 
 This creates:
@@ -40,40 +55,20 @@ This creates:
 
 ### 2. Plugin Installation
 
-#### Option A: Workspace Package (Monorepo)
-
-1. Copy `plugin/` to your `packages/` directory:
 ```bash
-cp -r plugin packages/strapi-plugin-audit-viewer
-```
-
-2. Add to your Strapi app's `package.json`:
-```json
-{
-  "dependencies": {
-    "strapi-plugin-audit-viewer": "workspace:*"
-  }
-}
-```
-
-3. Run install:
-```bash
-pnpm install
-```
-
-#### Option B: npm Package
-
-```bash
+# NPM
 npm install strapi-plugin-audit-viewer
-# or
+
+# Yarn
 yarn add strapi-plugin-audit-viewer
-# or
+
+# pnpm
 pnpm add strapi-plugin-audit-viewer
 ```
 
 ### 3. Enable Plugin
 
-Add to `config/plugins.ts`:
+Add to `config/plugins.ts` (or `.js`):
 
 ```typescript
 export default ({ env }) => ({
@@ -84,25 +79,167 @@ export default ({ env }) => ({
 });
 ```
 
-### 4. Build
+### 4. Environment Variables
+
+Add to your `.env`:
 
 ```bash
-# Build plugin (if using workspace)
-cd packages/strapi-plugin-audit-viewer
-pnpm build
+# Audit HMAC Secret (for tamper detection)
+AUDIT_HMAC_SECRET=your-secure-secret-here
 
-# Build Strapi
-cd apps/cms  # or your Strapi directory
-pnpm build
+# IP Hash Salt (for privacy)
+AUDIT_IP_SALT=your-ip-salt-here
+
+# Identifier Hash Salt (for email/username hashing)
+AUDIT_IDENTIFIER_SALT=your-id-salt-here
+
+# Retention period (months)
+AUDIT_RETENTION_MONTHS=24
 ```
 
-## Usage
+**Generate secure secrets:**
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
 
-1. Login to Strapi Admin Panel as **SuperAdmin**
-2. Click "Audit Logs" in the left menu
-3. Use filters to narrow down results
-4. Click "View" to see log details
-5. Click "Export CSV" to download filtered logs
+### 5. Build & Run
+
+```bash
+pnpm build
+pnpm develop
+```
+
+---
+
+## Strapi Integration (Audit Logging)
+
+The plugin only **reads** audit logs. To **write** logs, you need to integrate audit logging into your Strapi application.
+
+### Required Files
+
+Copy the example files to your Strapi project:
+
+```
+examples/
+├── request-context.ts  → src/middlewares/request-context.ts
+├── audit.ts            → src/utils/audit.ts
+└── strapi-server.ts    → src/extensions/users-permissions/strapi-server.ts
+```
+
+### Step 1: Request Context Middleware
+
+Copy `examples/request-context.ts` to `src/middlewares/request-context.ts`
+
+Then add to `config/middlewares.ts`:
+
+```typescript
+export default [
+  'strapi::errors',
+  'strapi::security',
+  'strapi::cors',
+  'strapi::logger',
+  'strapi::query',
+  'strapi::body',
+  'strapi::favicon',
+  'strapi::public',
+  // Add this line:
+  'global::request-context',
+];
+```
+
+### Step 2: Audit Utility
+
+Copy `examples/audit.ts` to `src/utils/audit.ts`
+
+This provides:
+- `auditLoginSuccess()` - Log successful login
+- `auditLoginFail()` - Log failed login (with rate limiting)
+- `auditPasswordResetRequest()` - Log password reset request
+- `auditPasswordResetConfirm()` - Log password reset confirmation
+- `auditEmailVerify()` - Log email verification
+- `auditAccountDeletion()` - Log account deletion events
+- `auditProfilePublish()` - Log profile publish/unpublish
+- `auditRoleChange()` - Log role changes
+
+### Step 3: Users-Permissions Extension
+
+Copy `examples/strapi-server.ts` to `src/extensions/users-permissions/strapi-server.ts`
+
+This automatically logs:
+- ✅ Successful logins
+- ❌ Failed logins (wrong password)
+- ❌ Deleted account login attempts
+- ❌ Unverified account login attempts
+- 🔑 Password reset requests
+- 🔑 Password reset confirmations
+
+### Step 4: Custom Audit Events
+
+Add audit logging to your custom controllers:
+
+```typescript
+import { auditAccountDeletion, auditProfilePublish } from '../utils/audit';
+
+// In your controller
+async deleteAccount(ctx) {
+  // ... deletion logic ...
+  
+  await auditAccountDeletion(strapi, ctx, {
+    action: 'DELETE_REQUESTED',
+    actorId: ctx.state.user.id,
+    targetUserId: ctx.state.user.id,
+    reason: 'User requested',
+  });
+}
+
+async publishProfile(ctx) {
+  // ... publish logic ...
+  
+  await auditProfilePublish(strapi, ctx, {
+    actorId: ctx.state.user.id,
+    targetType: 'coach',
+    targetId: profileId,
+    isPublish: true,
+  });
+}
+```
+
+---
+
+## Directory Structure
+
+```
+audit_log_viewer/
+├── README.md                           # This file
+├── LICENSE                             # MIT license
+├── .gitignore                          # Git ignore rules
+├── plugin/                             # Strapi plugin
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── admin/src/
+│   │   ├── index.tsx                   # Admin entry point
+│   │   ├── pluginId.ts
+│   │   ├── pages/AuditLogPage.tsx      # Main UI component
+│   │   └── translations/{en,tr}.json
+│   └── server/src/
+│       ├── index.ts
+│       ├── bootstrap.ts                # RBAC permission registration
+│       ├── routes/index.ts
+│       ├── controllers/audit-viewer.ts
+│       ├── services/audit-viewer.ts
+│       └── policies/is-super-admin.ts
+├── migrations/                         # PostgreSQL migrations
+│   ├── 001_audit_schema.sql
+│   └── 002_user_soft_delete.sql
+├── examples/                           # Example integration files
+│   ├── request-context.ts              # Middleware for request context
+│   ├── audit.ts                        # Audit utility functions
+│   └── strapi-server.ts                # Users-permissions extension
+└── docs/
+    └── AUDIT_LOG_VIEWER_PLUGIN.md      # Detailed documentation
+```
+
+---
 
 ## API Endpoints
 
@@ -129,9 +266,9 @@ All endpoints require SuperAdmin authentication:
 - `targetId` - Filter by target ID
 - `requestId` - Filter by request UUID
 
-## Audit Actions
+---
 
-The following actions are tracked:
+## Audit Actions
 
 | Action | Description |
 |--------|-------------|
@@ -150,44 +287,29 @@ The following actions are tracked:
 | `ANONYMIZED` | User data anonymized |
 | `PURGED` | User data purged |
 
-## Directory Structure
-
-```
-audit_log_viewer/
-├── README.md                 # This file
-├── plugin/                   # Strapi plugin
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── admin/src/
-│   │   ├── index.tsx         # Admin entry point
-│   │   ├── pluginId.ts
-│   │   ├── pages/
-│   │   │   └── AuditLogPage.tsx
-│   │   └── translations/
-│   │       ├── en.json
-│   │       └── tr.json
-│   └── server/src/
-│       ├── index.ts
-│       ├── bootstrap.ts
-│       ├── routes/index.ts
-│       ├── controllers/audit-viewer.ts
-│       ├── services/audit-viewer.ts
-│       └── policies/is-super-admin.ts
-├── migrations/               # PostgreSQL migrations
-│   ├── 001_audit_schema.sql
-│   └── 002_user_soft_delete.sql
-└── docs/                     # Documentation
-    ├── AUDIT_LOG_VIEWER_PLUGIN.md
-    └── AUDIT_SOFT_DELETE.md
-```
+---
 
 ## Security
 
+### Access Control
 - **SuperAdmin only** - Policy enforces SuperAdmin role check
 - **RBAC permissions** - Plugin registers `plugin::audit-viewer.read` and `plugin::audit-viewer.export`
-- **No PII in UI** - `ip_hash` and `sig` fields are not exposed
-- **SQL injection safe** - All queries use Knex parameterized queries
-- **Rate limiting** - Export limited to 10,000 rows, 90 days max
+
+### PII Protection
+- `ip_hash` and `sig` fields are not exposed to UI
+- User-Agent is truncated to 100 characters
+- Email/phone are never stored in meta
+
+### Rate Limiting
+- Export limited to 10,000 rows, 90 days max
+- Page size limited to 100
+- Date range limited to 31 days for UI queries
+
+### SQL Injection Prevention
+- All queries use Knex parameterized queries
+- Filters are whitelist-validated
+
+---
 
 ## Troubleshooting
 
@@ -199,57 +321,31 @@ audit_log_viewer/
 
 ### "Invalid hook call" error
 
-This error occurs when React is bundled multiple times. Ensure React is in `peerDependencies`, not `dependencies`:
-
-```json
-{
-  "peerDependencies": {
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0"
-  }
-}
-```
+This occurs when React is bundled multiple times. Ensure React is in `peerDependencies`, not `dependencies`.
 
 After fixing, clean rebuild:
 ```bash
 cd plugin && rm -rf node_modules dist
 pnpm install && pnpm build
-cd ../apps/cms && rm -rf .cache && pnpm build
+cd ../your-strapi-app && rm -rf .cache && pnpm build
 ```
 
-### Empty table
+### Empty table (but stats show count)
 
-1. Check if `audit.audit_log_hot` view exists
-2. Verify PostgreSQL connection
-3. Check date filter range
-4. Ensure audit logging is integrated in your application
+Date filter issue - the plugin now sets `toDate` to end of day (23:59:59). Make sure you have the latest version.
+
+### No audit logs appearing
+
+1. Check if migrations ran: `SELECT * FROM audit.audit_log_hot LIMIT 5;`
+2. Check if middleware is active: Look for `request-context` in middlewares config
+3. Check if extension is loaded: Look for login-related logs
 
 ### API 403 error
 
 - SuperAdmin role is required
 - Check RBAC permissions in Settings > Roles
 
-## Integrating Audit Logging
-
-To log events from your Strapi application, use the audit utility functions. Example:
-
-```typescript
-import { writeAudit } from './utils/audit';
-
-// Log a successful login
-await writeAudit(strapi, {
-  ctx,
-  actorType: 'user',
-  actorId: userId,
-  action: 'LOGIN_SUCCESS',
-  result: 'success',
-  targetType: 'user',
-  targetId: userId,
-  meta: { method: 'local' },
-});
-```
-
-See `docs/AUDIT_SOFT_DELETE.md` for complete integration guide.
+---
 
 ## License
 
@@ -266,5 +362,8 @@ Contributions are welcome! Please open an issue or submit a pull request.
 - Strapi 5 compatibility
 - PostgreSQL partition table support
 - SuperAdmin-only access
+- Dark/Light theme support
 - CSV export functionality
+- Date filter fix (end of day)
+- Login fail direct logging (not just bucketing)
 

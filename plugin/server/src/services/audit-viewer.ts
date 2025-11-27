@@ -88,6 +88,11 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
     
     let fromDate = params.from ? new Date(params.from) : defaultFrom;
     let toDate = params.to ? new Date(params.to) : now;
+    
+    // Set toDate to end of day (23:59:59.999)
+    if (params.to) {
+      toDate.setHours(23, 59, 59, 999);
+    }
 
     // Validate date range (max 31 days for UI queries)
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000);
@@ -251,6 +256,11 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
     
     let fromDate = params.from ? new Date(params.from) : defaultFrom;
     let toDate = params.to ? new Date(params.to) : now;
+    
+    // Set toDate to end of day (23:59:59.999)
+    if (params.to) {
+      toDate.setHours(23, 59, 59, 999);
+    }
 
     // Limit export range
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000);
@@ -319,7 +329,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       request_id: row.request_id,
       ua: row.ua ? row.ua.substring(0, 100) : null, // Truncate UA
       meta: row.meta || {},
-      // ip_hash ve sig gösterilmiyor (güvenlik)
+      // ip_hash and sig are not displayed (security)
     };
   },
 });
