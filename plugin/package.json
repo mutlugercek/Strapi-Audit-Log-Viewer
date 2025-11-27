@@ -4,13 +4,13 @@
   "description": "Audit log viewer for Strapi v5 Admin Panel - Read-only access to PostgreSQL partition tables (Community Edition)",
   "license": "MIT",
   "author": "Mutlu Gercek",
-  "homepage": "https://github.com/smutlugercek/strapi-plugin-audit-viewer#readme",
+  "homepage": "https://github.com/mutlugercek/strapi-plugin-audit-viewer#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/smutlugercek/strapi-plugin-audit-viewer.git"
+    "url": "git+https://github.com/mutlugercek/strapi-plugin-audit-viewer.git"
   },
   "bugs": {
-    "url": "https://github.com/smutlugercek/strapi-plugin-audit-viewer/issues"
+    "url": "https://github.com/mutlugercek/strapi-plugin-audit-viewer/issues"
   },
   "strapi": {
     "displayName": "Audit Log Viewer",
