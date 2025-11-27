@@ -16,7 +16,7 @@ A custom Strapi 5 plugin for viewing audit logs directly from PostgreSQL partiti
 
 ## Requirements
 
-- Strapi 5.x
+- Strapi 5.x (tested with 5.27)
 - PostgreSQL with `audit` schema
 - Node.js >= 18.0.0
 
@@ -61,60 +61,44 @@ cp -r plugin packages/strapi-plugin-audit-viewer
 pnpm install
 ```
 
-#### Option B: Local Plugin
-
-1. Copy `plugin/` to your Strapi's `src/plugins/`:
-```bash
-cp -r plugin apps/cms/src/plugins/audit-viewer
-```
-
-2. Update `config/plugins.ts`:
-```typescript
-'audit-viewer': {
-  enabled: true,
-  resolve: './src/plugins/audit-viewer',
-},
-```
-
-### 3. Build
+#### Option B: npm Package
 
 ```bash
-# Build plugin
-cd packages/strapi-plugin-audit-viewer  # or src/plugins/audit-viewer
-pnpm build
-
-# Build Strapi
-cd apps/cms
-pnpm build
+npm install strapi-plugin-audit-viewer
+# or
+yarn add strapi-plugin-audit-viewer
+# or
+pnpm add strapi-plugin-audit-viewer
 ```
 
-### 4. Enable Plugin
+### 3. Enable Plugin
 
 Add to `config/plugins.ts`:
 
 ```typescript
-'audit-viewer': {
-  enabled: true,
-},
+export default ({ env }) => ({
+  'audit-viewer': {
+    enabled: true,
+  },
+  // ... other plugins
+});
 ```
 
-## Configuration
+### 4. Build
 
-### Environment Variables (Optional)
+```bash
+# Build plugin (if using workspace)
+cd packages/strapi-plugin-audit-viewer
+pnpm build
 
-```env
-# Audit retention (months)
-AUDIT_RETENTION_MONTHS=24
-
-# Secrets for HMAC signatures
-AUDIT_HMAC_SECRET=your-secret-key
-AUDIT_IP_SALT=your-ip-salt
-AUDIT_IDENTIFIER_SALT=your-id-salt
+# Build Strapi
+cd apps/cms  # or your Strapi directory
+pnpm build
 ```
 
 ## Usage
 
-1. Login to Strapi Admin Panel as SuperAdmin
+1. Login to Strapi Admin Panel as **SuperAdmin**
 2. Click "Audit Logs" in the left menu
 3. Use filters to narrow down results
 4. Click "View" to see log details
@@ -149,20 +133,22 @@ All endpoints require SuperAdmin authentication:
 
 The following actions are tracked:
 
-- `LOGIN_SUCCESS` - Successful login
-- `LOGIN_FAIL_BUCKETED` - Failed login (bucketed for rate limiting)
-- `PASSWORD_RESET_REQUEST` - Password reset requested
-- `PASSWORD_RESET_CONFIRM` - Password reset confirmed
-- `EMAIL_VERIFY` - Email verified
-- `PROFILE_PUBLISH` - Profile published
-- `PROFILE_UNPUBLISH` - Profile unpublished
-- `PROFILE_UPDATE_SENSITIVE` - Sensitive profile data updated
-- `ROLE_CHANGED` - User role changed
-- `PERMISSION_CHANGED` - Permission changed
-- `DELETE_REQUESTED` - Account deletion requested
-- `DELETE_CONFIRMED` - Account deletion confirmed
-- `ANONYMIZED` - User data anonymized
-- `PURGED` - User data purged
+| Action | Description |
+|--------|-------------|
+| `LOGIN_SUCCESS` | Successful user login |
+| `LOGIN_FAIL_BUCKETED` | Failed login (bucketed for rate limiting) |
+| `PASSWORD_RESET_REQUEST` | Password reset requested |
+| `PASSWORD_RESET_CONFIRM` | Password reset confirmed |
+| `EMAIL_VERIFY` | Email verified |
+| `PROFILE_PUBLISH` | Profile published |
+| `PROFILE_UNPUBLISH` | Profile unpublished |
+| `PROFILE_UPDATE_SENSITIVE` | Sensitive profile data updated |
+| `ROLE_CHANGED` | User role changed |
+| `PERMISSION_CHANGED` | Permission changed |
+| `DELETE_REQUESTED` | Account deletion requested |
+| `DELETE_CONFIRMED` | Account deletion confirmed |
+| `ANONYMIZED` | User data anonymized |
+| `PURGED` | User data purged |
 
 ## Directory Structure
 
@@ -171,25 +157,26 @@ audit_log_viewer/
 ├── README.md                 # This file
 ├── plugin/                   # Strapi plugin
 │   ├── package.json
-│   ├── admin/               # Admin UI
-│   │   └── src/
-│   │       ├── index.tsx
-│   │       ├── pluginId.ts
-│   │       ├── pages/
-│   │       │   └── AuditLogPage.tsx
-│   │       └── translations/
-│   └── server/              # Server API
-│       └── src/
-│           ├── index.ts
-│           ├── bootstrap.ts
-│           ├── routes/
-│           ├── controllers/
-│           ├── services/
-│           └── policies/
-├── migrations/              # PostgreSQL migrations
+│   ├── tsconfig.json
+│   ├── admin/src/
+│   │   ├── index.tsx         # Admin entry point
+│   │   ├── pluginId.ts
+│   │   ├── pages/
+│   │   │   └── AuditLogPage.tsx
+│   │   └── translations/
+│   │       ├── en.json
+│   │       └── tr.json
+│   └── server/src/
+│       ├── index.ts
+│       ├── bootstrap.ts
+│       ├── routes/index.ts
+│       ├── controllers/audit-viewer.ts
+│       ├── services/audit-viewer.ts
+│       └── policies/is-super-admin.ts
+├── migrations/               # PostgreSQL migrations
 │   ├── 001_audit_schema.sql
 │   └── 002_user_soft_delete.sql
-└── docs/                    # Documentation
+└── docs/                     # Documentation
     ├── AUDIT_LOG_VIEWER_PLUGIN.md
     └── AUDIT_SOFT_DELETE.md
 ```
@@ -212,7 +199,7 @@ audit_log_viewer/
 
 ### "Invalid hook call" error
 
-Ensure React is in `peerDependencies`, not `dependencies`:
+This error occurs when React is bundled multiple times. Ensure React is in `peerDependencies`, not `dependencies`:
 
 ```json
 {
@@ -223,17 +210,61 @@ Ensure React is in `peerDependencies`, not `dependencies`:
 }
 ```
 
+After fixing, clean rebuild:
+```bash
+cd plugin && rm -rf node_modules dist
+pnpm install && pnpm build
+cd ../apps/cms && rm -rf .cache && pnpm build
+```
+
 ### Empty table
 
 1. Check if `audit.audit_log_hot` view exists
-2. Check PostgreSQL connection
-3. Verify date filter range
+2. Verify PostgreSQL connection
+3. Check date filter range
+4. Ensure audit logging is integrated in your application
+
+### API 403 error
+
+- SuperAdmin role is required
+- Check RBAC permissions in Settings > Roles
+
+## Integrating Audit Logging
+
+To log events from your Strapi application, use the audit utility functions. Example:
+
+```typescript
+import { writeAudit } from './utils/audit';
+
+// Log a successful login
+await writeAudit(strapi, {
+  ctx,
+  actorType: 'user',
+  actorId: userId,
+  action: 'LOGIN_SUCCESS',
+  result: 'success',
+  targetType: 'user',
+  targetId: userId,
+  meta: { method: 'local' },
+});
+```
+
+See `docs/AUDIT_SOFT_DELETE.md` for complete integration guide.
 
 ## License
 
 MIT
 
-## Author
+## Contributing
 
-Mutlu Gerçek
+Contributions are welcome! Please open an issue or submit a pull request.
+
+## Changelog
+
+### 1.0.0
+- Initial release
+- Strapi 5 compatibility
+- PostgreSQL partition table support
+- SuperAdmin-only access
+- CSV export functionality
 

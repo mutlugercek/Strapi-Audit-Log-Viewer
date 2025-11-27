@@ -1,7 +1,7 @@
 {
   "name": "strapi-plugin-audit-viewer",
   "version": "1.0.0",
-  "description": "Audit log viewer for Strapi Admin Panel",
+  "description": "Audit log viewer for Strapi Admin Panel - Read-only access to PostgreSQL partition tables",
   "license": "MIT",
   "strapi": {
     "displayName": "Audit Log Viewer",
@@ -53,7 +53,19 @@
     "react-router-dom": "^6.0.0",
     "styled-components": "^6.0.0"
   },
-  "author": "BetterCoaching",
+  "author": "Mutlu Gerçek",
+  "keywords": [
+    "strapi",
+    "plugin",
+    "audit",
+    "logging",
+    "postgresql",
+    "admin-panel"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
   "engines": {
     "node": ">=18.0.0 <=22.x.x",
     "npm": ">=6.0.0"

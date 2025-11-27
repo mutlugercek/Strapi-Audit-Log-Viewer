@@ -140,6 +140,47 @@ const AUDIT_ACTIONS = [
 ];
 ```
 
+#### Audit Log Entegrasyonu
+
+Aşağıdaki olaylar otomatik olarak audit log'a yazılır:
+
+| Olay | Fonksiyon | Tetiklendiği Dosya | Açıklama |
+|------|-----------|-------------------|----------|
+| Başarılı login | `auditLoginSuccess()` | `strapi-server.ts` | Kullanıcı başarıyla giriş yaptığında |
+| Başarısız login (yanlış şifre) | `auditLoginFail()` | `strapi-server.ts` | Geçersiz credentials |
+| Silinmiş hesap login denemesi | `auditLoginFail()` | `strapi-server.ts` | reason: `ACCOUNT_DELETED` |
+| Doğrulanmamış hesap login | `auditLoginFail()` | `strapi-server.ts` | reason: `UNCONFIRMED` |
+| Şifre sıfırlama isteği | `auditPasswordResetRequest()` | `strapi-server.ts` | Forgot password çağrıldığında |
+| Şifre sıfırlama onayı | `auditPasswordResetConfirm()` | `strapi-server.ts` | Şifre başarıyla değiştiğinde |
+| Email doğrulama | `auditEmailVerify()` | `custom.ts` | Email verify edildiğinde |
+| Hesap silme isteği | `auditAccountDeletion()` | `account.ts` | action: `DELETE_REQUESTED` |
+| Hesap silme onayı | `auditAccountDeletion()` | `account.ts` | action: `DELETE_CONFIRMED` |
+| Kullanıcı anonimleştirme | `auditAccountDeletion()` | `account.ts` | action: `ANONYMIZED` |
+
+**Audit Utility Fonksiyonları** (`src/utils/audit.ts`):
+
+```typescript
+// Login olayları
+auditLoginSuccess(strapi, ctx, userId, { method: 'local' })
+auditLoginFail(strapi, ctx, identifier, reasonCode)
+
+// Password reset
+auditPasswordResetRequest(strapi, ctx, userId?)
+auditPasswordResetConfirm(strapi, ctx, userId)
+
+// Email verification
+auditEmailVerify(strapi, ctx, userId)
+
+// Profile olayları
+auditProfilePublish(strapi, ctx, { actorId, targetType, targetId, isPublish })
+
+// Role değişikliği
+auditRoleChange(strapi, ctx, { actorId, targetUserId, fromRoleId, toRoleId })
+
+// Hesap silme
+auditAccountDeletion(strapi, ctx, { action, actorId, targetUserId, reason })
+```
+
 #### DB Sorgulama
 
 Plugin, Strapi CT (Content Type) kullanmaz. Doğrudan Knex ile PostgreSQL sorgusu yapar:
@@ -573,6 +614,28 @@ pnpm develop
 | @strapi/design-system | ^2.0.0-rc.0 (peer) |
 | @strapi/icons | ^2.0.0-rc.0 (peer) |
 | Node.js | >=18.0.0 <=22.x.x |
+
+---
+
+## İlgili Dosyalar
+
+### Audit Logging
+
+| Dosya | Açıklama |
+|-------|----------|
+| `src/utils/audit.ts` | Ana audit utility fonksiyonları |
+| `src/middlewares/request-context.ts` | IP hash, request ID extraction |
+| `src/extensions/users-permissions/strapi-server.ts` | Login/logout audit hook'ları |
+| `src/api/auth/controllers/custom.ts` | Email verify audit |
+| `src/api/account/controllers/account.ts` | Account deletion audit |
+| `config/cron.ts` | Bucket flush ve partition management |
+
+### Database
+
+| Dosya | Açıklama |
+|-------|----------|
+| `database/migrations/001_audit_schema.sql` | Audit schema ve tablolar |
+| `database/migrations/002_user_soft_delete.sql` | Soft delete alanları |
 
 ---
 
