@@ -216,6 +216,9 @@ const auditViewer = ({ strapi }) => ({
     const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
     let fromDate = params.from ? new Date(params.from) : defaultFrom;
     let toDate = params.to ? new Date(params.to) : now;
+    if (params.to) {
+      toDate.setHours(23, 59, 59, 999);
+    }
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1e3);
     if (rangeDays > MAX_DATE_RANGE_DAYS) {
       fromDate = new Date(toDate.getTime() - MAX_DATE_RANGE_DAYS * 24 * 60 * 60 * 1e3);
@@ -336,6 +339,9 @@ const auditViewer = ({ strapi }) => ({
     const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
     let fromDate = params.from ? new Date(params.from) : defaultFrom;
     let toDate = params.to ? new Date(params.to) : now;
+    if (params.to) {
+      toDate.setHours(23, 59, 59, 999);
+    }
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1e3);
     if (rangeDays > MAX_EXPORT_DAYS) {
       fromDate = new Date(toDate.getTime() - MAX_EXPORT_DAYS * 24 * 60 * 60 * 1e3);
@@ -396,7 +402,7 @@ const auditViewer = ({ strapi }) => ({
       ua: row.ua ? row.ua.substring(0, 100) : null,
       // Truncate UA
       meta: row.meta || {}
-      // ip_hash ve sig gösterilmiyor (güvenlik)
+      // ip_hash and sig are not displayed (security)
     };
   }
 });

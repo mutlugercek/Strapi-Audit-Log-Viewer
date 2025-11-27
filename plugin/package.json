@@ -1,8 +1,17 @@
 {
   "name": "strapi-plugin-audit-viewer",
   "version": "1.0.0",
-  "description": "Audit log viewer for Strapi Admin Panel - Read-only access to PostgreSQL partition tables",
+  "description": "Audit log viewer for Strapi v5 Admin Panel - Read-only access to PostgreSQL partition tables (Community Edition)",
   "license": "MIT",
+  "author": "Mutlu Gercek",
+  "homepage": "https://github.com/smutlugercek/strapi-plugin-audit-viewer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smutlugercek/strapi-plugin-audit-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/smutlugercek/strapi-plugin-audit-viewer/issues"
+  },
   "strapi": {
     "displayName": "Audit Log Viewer",
     "name": "audit-viewer",
@@ -10,6 +19,8 @@
     "kind": "plugin"
   },
   "type": "commonjs",
+  "main": "./dist/server/index.js",
+  "module": "./dist/server/index.mjs",
   "exports": {
     "./strapi-admin": {
       "types": "./dist/admin/src/index.d.ts",
@@ -28,13 +39,18 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "strapi-admin.js",
+    "strapi-server.js",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "strapi-plugin build",
     "watch": "strapi-plugin watch",
     "watch:link": "strapi-plugin watch:link",
-    "verify": "strapi-plugin verify"
+    "verify": "strapi-plugin verify",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@strapi/sdk-plugin": "^5.2.6",
@@ -56,16 +72,15 @@
   "keywords": [
     "strapi",
     "strapi-plugin",
+    "strapi-v5",
     "audit",
+    "audit-log",
     "logging",
     "postgresql",
     "admin-panel",
-    "security"
+    "security",
+    "compliance"
   ],
-  "repository": {
-    "type": "git",
-    "url": ""
-  },
   "engines": {
     "node": ">=18.0.0 <=22.x.x",
     "npm": ">=6.0.0"
