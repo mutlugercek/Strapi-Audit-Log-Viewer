@@ -20,12 +20,6 @@ A custom Strapi 5 plugin for viewing audit logs directly from PostgreSQL partiti
 - **PII Protection** - sensitive data (ip_hash, sig) not exposed to UI
 - **Dark/Light theme** compatible UI
 
-## Screenshots
-
-| Stats & Filters | Table View | Detail Modal |
-|-----------------|------------|--------------|
-| ![Stats](docs/screenshots/stats.png) | ![Table](docs/screenshots/table.png) | ![Detail](docs/screenshots/detail.png) |
-
 ## Requirements
 
 - Strapi 5.x (tested with 5.27)
